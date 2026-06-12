@@ -33,7 +33,7 @@ Telegram group chat
            ▼
 ┌─────────────────────────┐
 │  Persistence (KV-style) │
-│  key: chat:<chatId>     │
+│  key: town:<chatId>     │
 │  val: Town JSON         │
 │  { gold, food,          │
 │    unlocked: [..] }     │
@@ -46,7 +46,8 @@ Telegram group chat
   step). No per-user session needed for v1.
 - **Persistence**: chat-keyed record. One town per group chat, identified by
   `ctx.chat.id`. Default storage = in-memory `MemorySessionStorage` for dev;
-  swap for a real adapter before publish.
+  swap for a real adapter before publish. The storage key prefix is
+  `town:<chatId>`.
 - **Bot token**: `process.env.BOT_TOKEN`. Never in source.
 
 ### Data model
@@ -115,6 +116,8 @@ Bot:   🏰 The town is still standing.
 - Any reaction added to a message: `town.food += 1`.
 - Bot's own messages and bot-added reactions are ignored (filter on
   `from.is_bot` and `message.from.is_bot`).
+- Service messages (member join/leave, pinned message, etc.) are also
+  excluded via `!ctx.message?.service`.
 - No notification to chat on every gain — that would spam. Resource totals
   surface only in `/town` and `/spend` outputs.
 
@@ -154,7 +157,8 @@ Step 2 — handle callback:
 - **Already built** → toast: `"Already built."`, keep menu open.
 - **Not enough resources** → toast: `"Not enough resources."`, keep menu
   open.
-- **Cancel** → clear session, delete the menu message.
+- **Cancel** → clear session, `editMessageText("Build menu closed.")` on
+  the menu message.
 
 ### 3.5 `/help`
 
@@ -174,7 +178,7 @@ These are not commands but Update listeners wired at bot setup:
 | `message` (non-bot, in group) | `town.gold += 1` |
 | `message_reaction` (non-bot user) | `town.food += 1` |
 | `new_chat_members` (bot added) | Send `/start`-equivalent welcome |
-| `left_chat_member` (bot removed) | Optionally log; town record is dropped only on explicit `/reset` (out of v1 scope — see Non-Goals) |
+| `my_chat_member` status = `kicked` or `left` (bot removed) | Log; town record is NOT dropped — recovery on re-add is the expected path. Explicit `/reset` to drop a town record is out of v1 scope (see Non-Goals). |
 
 ## 5. Out of scope (matches General non-goals)
 

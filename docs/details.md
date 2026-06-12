@@ -5,6 +5,20 @@ This doc is the contract each `dev` task must implement against.
 
 ## Global behaviour
 
+- **Architecture**:
+  - grammY bot built via `@agntdev/bot-toolkit` (`createBot` + sessions).
+  - Handlers call into a `TownService` layer with methods
+    `getOrCreateTown(chatId)`, `addGold(chatId, n)`, `addFood(chatId, n)`,
+    `listBuildings()`, `spend(chatId, buildingKey)`.
+  - `TownService` is the single owner of persistence; handlers do not
+    read or write the store directly.
+- **Entry point**: `src/index.ts` exports `makeBot()` per the toolkit
+  factory contract. A fresh bot instance is created per call — the test
+  harness relies on this.
+- **Runtime**: Node.js 18+. Long polling for dev, webhook-ready for prod.
+- **Bot token**: `process.env.BOT_TOKEN`. Never present in source.
+- **Session storage**: in-memory `MemorySessionStorage` for dev. Swap
+  the adapter (e.g. KV-backed) before publish.
 - **Scope**: group chats only. In a private chat the bot replies
   `"This bot works in group chats."` to every command and ignores all
   other updates.
@@ -78,9 +92,11 @@ The only stateful flow. Uses `ctx.session.step` (per-chat session).
 
 - **Trigger**: `bot.command("spend", ...)`.
 - **Pre**: `ctx.session.step` reset to `awaiting_building` (string
-  literal, namespaced if other flows are added later).
-- **Effect**: send a new message with the menu, persist the message id
-  in session so a future `/spend` can edit it instead of spamming.
+  literal).
+- **Effect**: send a new message with the menu. The message id is
+  tracked locally for the duration of the callback; a subsequent
+  `/spend` simply sends a fresh menu that replaces the prior one in
+  the chat.
 - **Menu message**:
   ```
   💰 Gold: <n>   🍞 Food: <n>
@@ -90,8 +106,8 @@ The only stateful flow. Uses `ctx.session.step` (per-chat session).
   - One button per building whose label is `"<Name>  (<costG>g<cF>f)"` and
     `callback_data = "build:<key>"`.
   - A final row with `"Cancel"` → `callback_data = "build:cancel"`.
-  - Buttons are omitted (or shown as a single row with `"—"`) if there
-    are no buildings.
+  - The static `BUILDINGS` list is never empty in v1, so the menu
+    always contains at least one building button.
 - **Callback handler**: `bot.callbackQuery(/^build:/, ...)`.
   1. `answerCallbackQuery()` first (always).
   2. Branch on `data`:
@@ -116,8 +132,8 @@ The only stateful flow. Uses `ctx.session.step` (per-chat session).
 | Source event | Filter | Effect |
 |---|---|---|
 | `message` (group, non-bot) | `ctx.chat.type ∈ {"group","supergroup"}` and `!ctx.from?.is_bot` and `!ctx.message?.service` | `town.gold += 1` |
-| `message_reaction` (group) | non-bot reactor | `town.food += 1` |
-| `new_chat_members` | includes this bot | send `/start`-equivalent welcome to the chat |
+| `message_reaction` (group) | `!reactor.is_bot` (non-bot reactor) | `town.food += 1` |
+| `new_chat_members` | new member list includes this bot (`ctx.me.id`) | send the new-town welcome message (same text as `/start` on a fresh group) to the chat |
 | `my_chat_member` status = `kicked`/`left` | n/a | log; do not delete the town record (recovery on re-add) |
 
 ## BotSpec test coverage (assigned to integration task)
@@ -148,7 +164,7 @@ interface Town {
   gold: number;
   food: number;
   unlocked: string[];   // building keys
-  createdAt: number;    // ms epoch
+  createdAt: number;    // ms epoch; set on first creation, immutable thereafter
 }
 
 interface Building {

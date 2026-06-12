@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tgz
+!.agntdev-bot-toolkit.tgz
+.env
+.env.*

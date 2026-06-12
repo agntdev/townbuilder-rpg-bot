@@ -1,0 +1,29 @@
+{
+  "phase": "dev",
+  "tasks": [
+    {
+      "key": "F00",
+      "kind": "foundation",
+      "title": "Bot skeleton, TownService, persistence, and event listeners",
+      "depends_on": []
+    },
+    {
+      "key": "FEAT01",
+      "kind": "feature",
+      "title": "Read-only commands: /start, /help, /town",
+      "depends_on": ["F00"]
+    },
+    {
+      "key": "FEAT02",
+      "kind": "feature",
+      "title": "/spend command with inline-keyboard build menu and callback handling",
+      "depends_on": ["F00"]
+    },
+    {
+      "key": "INT01",
+      "kind": "integration",
+      "title": "Write BotSpec test files and verify all flows pass the harness",
+      "depends_on": ["FEAT01", "FEAT02"]
+    }
+  ]
+}
